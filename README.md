@@ -102,7 +102,12 @@ Final note: every window you create in the client will soon be captured by the p
 
 ## Screenshots
 
+Normal views
+
 ![Screenshot1](assets/sc.png)
+
+Shaded views
+
 ![Screenshot2](assets/sc1.png)
 
 My theme is a tweaked Crux, I changed the tint of the title area and left side border.  
