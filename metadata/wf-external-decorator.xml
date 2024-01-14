@@ -8,6 +8,7 @@
 			<_short>Decoration provider</_short>
 			<_long>Decoration provider.</_long>
 			<default>wf-metacity-decorator</default>
+            <hint>file</hint>
 		</option>
 		<option name="ignore_views" type="string">
 			<_short>Decoration disabled for specified window types</_short>
