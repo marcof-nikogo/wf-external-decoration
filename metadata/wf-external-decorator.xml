@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<wayfire>
+	<plugin name="wf-external-decorator">
+		<_short>External Decorator</_short>
+		<_long>External decoration for wayfire windows.</_long>
+		<category>Effects</category>
+		<option name="decorator" type="string">
+			<_short>Decoration provider</_short>
+			<_long>Decoration provider.</_long>
+			<default>wf-metacity-decorator</default>
+		</option>
+		<option name="ignore_views" type="string">
+			<_short>Decoration disabled for specified window types</_short>
+			<_long>Disables window decoration for windows matching the specified criteria.</_long>
+			<default>none</default>
+		</option>
+	</plugin>
+</wayfire>

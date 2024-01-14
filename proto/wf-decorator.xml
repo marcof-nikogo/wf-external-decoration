@@ -1,0 +1,65 @@
+<protocol name="wf_decorator">
+    <interface name="wf_decorator_manager" version="1">
+        <event name="create_new_decoration">
+        <description summary="Create a decoration window for the given view, type toplevel=0 dialog=1"/>
+            <arg name="view" type="uint"/>
+            <arg name="type" type="uint"/>
+        </event>
+
+        <request name="update_borders">
+        <description summary="Tell the plugin the borders size, 
+                              delta is the difference between normal and maximized"/>
+            <arg name="top"    type="uint"/>
+            <arg name="bottom" type="uint"/>
+            <arg name="left"   type="uint"/>
+            <arg name="right"  type="uint"/>
+            <arg name="delta"  type="uint"/>
+        </request>
+
+        <event name="title_changed">
+        <description summary="Notice the client"/>
+            <arg name="decoration" type="uint"/>
+            <arg name="new_title" type="string"/>
+        </event>
+
+        <event name="check_button">
+        <description summary="Ask the client to handle the buttons, when a button is pressed the client sends a action"/>
+            <arg name="decoration" type="uint"/>
+            <arg name="x"          type="uint"/>
+            <arg name="y"          type="uint"/>
+            <arg name="pressed"    type="uint"/>
+        </event>
+
+        <event name="view_state_changed">
+        <description summary="Notice the client"/>
+            <arg name="decoration" type="uint"/>
+            <arg name="state"      type="uint"/>
+        </event>
+
+        <event name="reset_states">
+        <description summary="Tell the client to reset the buttons states and redraw"/>
+            <arg name="decoration" type="uint"/>
+        </event>
+
+        <event name="view_unmapped">
+        <description summary="Tell the client to free resources allocated to a window"/>
+            <arg name="decoration" type="uint"/>
+        </event>
+
+        <request name="window_action">
+        <description summary="Tell the plugin the action triggered by a button"/>
+            <arg name="window"   type="uint"/>
+            <arg name="action"   type="string"/>
+        </request>
+
+        <request name="update_title_rect">
+        <description summary="Tell the plugin the area of the title, a pointer event in the top border area outside this rect is elegible for button events"/>
+            <arg name="window" type="uint"/>
+            <arg name="top"    type="uint"/>
+            <arg name="bottom" type="uint"/>
+            <arg name="left"   type="uint"/>
+            <arg name="right"  type="uint"/>
+        </request>
+
+    </interface>
+</protocol>
