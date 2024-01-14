@@ -274,6 +274,27 @@ gboolean draw_window(GtkWindow *window, cairo_t *cr, gpointer)
     return TRUE;
 }
 
+gboolean motion_notify_event (GtkWidget *window, GdkEventMotion *ev, gpointer data)
+{
+    printf("motion_notify_event %d %d\n", (int)ev->x, (int)ev->y);
+    return FALSE;
+}
+
+gboolean button_press_event (GtkWidget *window, GdkEventButton *ev, gpointer data)
+{
+    gint x,y;
+    gtk_window_get_position (GTK_WINDOW(window), &x, &y);
+    printf("button_press_event %d %d %d\n", ev->button, x, y);
+    gtk_window_move (GTK_WINDOW(window), x + 10, y + 10);
+    return TRUE;
+}
+
+gboolean button_release_event (GtkWidget *window, GdkEventButton *ev, gpointer data)
+{
+    printf("button_release_event %d %d %d\n", ev->button, (int)ev->x, (int)ev->y);
+    return FALSE;
+}
+
 // type: 0 toplevel, 1 dialog 
 // the title has the format: __wf_decorator:<id> 
 GtkWidget *create_deco_window (std::string title, uint type)
@@ -285,7 +306,11 @@ GtkWidget *create_deco_window (std::string title, uint type)
     GdkScreen *screen = gtk_window_get_screen (GTK_WINDOW(window));
     GdkVisual *visual = gdk_screen_get_rgba_visual (screen);
     gtk_widget_set_visual (window, visual);
+    gtk_widget_set_events (window, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK | GDK_BUTTON1_MOTION_MASK);
     g_signal_connect (window,"draw", (GCallback)draw_window, NULL);
+    g_signal_connect (window,"button-press-event", (GCallback)button_press_event, NULL);
+    g_signal_connect (window,"button-release-event", (GCallback)button_release_event, NULL);
+//    g_signal_connect (window,"motion-notify-event", (GCallback)motion_notify_event, NULL);
     gtk_widget_show_all(window);
     printf("CREATED new decoration: %s\n", title.c_str());
     decoration_data_t *deco = new decoration_data_t (window, type);

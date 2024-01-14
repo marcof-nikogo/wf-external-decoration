@@ -83,7 +83,7 @@ std::ostream &operator<<(std::ostream &out, const wf::dimensions_t &dims)
     return out;
 }
 
-class extern_decoration_node_t : public wf::scene::wlr_surface_node_t, public wf::pointer_interaction_t, public wf::touch_interaction_t
+class extern_decoration_node_t : public wf::scene::wlr_surface_node_t //, public wf::pointer_interaction_t, public wf::touch_interaction_t
 {
     public:
     int current_x, current_y, current_ms, may_be_hover = 0;
@@ -161,7 +161,6 @@ class extern_decoration_node_t : public wf::scene::wlr_surface_node_t, public wf
     {
         if (decorator_resource)
         {
-//            LOGI("Sticky changed ", decorated_view->get_title(), " ", decorated_view->sticky);
             if (ev->view->sticky)
                 state |= STATE_STICKY;
             else
@@ -191,7 +190,7 @@ class extern_decoration_node_t : public wf::scene::wlr_surface_node_t, public wf
 
         return {};
     }
-
+/*
     pointer_interaction_t& pointer_interaction() override 
     {
         return *this;
@@ -312,7 +311,7 @@ class extern_decoration_node_t : public wf::scene::wlr_surface_node_t, public wf
         wf::get_core().set_cursor(cursor_name);
         return edges;
     }
-
+*/
 };  // extern_decoration_node_t
 
 static std::map<uint32_t, std::shared_ptr<extern_decoration_node_t>> view_to_decor;
@@ -559,6 +558,9 @@ public:
     std::weak_ptr<wf::toplevel_t> decorated_toplevel;
     int first = 0;
     
+    wf::wl_listener_wrapper on_request_move, on_request_resize, on_request_minimize, on_request_maximize,
+        on_request_fullscreen;// on_show_window_menu;
+    
     extern_decoration_object_t(
         wlr_xdg_toplevel *toplevel, std::weak_ptr<extern_decoration_node_t> deco_node,
         std::weak_ptr<extern_mask_node_t> mask, std::weak_ptr<wf::toplevel_t> decorated_toplevel)
@@ -570,8 +572,46 @@ public:
         auto node = deco_node.lock();
         tmp->view_id = node->view_id;
         this->decorated_toplevel = decorated_toplevel;
-        auto dec_toplevel = decorated_toplevel.lock();
-        auto decorated_view = wf::find_view_for_toplevel(dec_toplevel);
+        
+//        auto dec_toplevel = decorated_toplevel.lock();
+//        auto decorated_view = wf::find_view_for_toplevel(dec_toplevel);
+//        on_set_parent.connect(&toplevel->events.set_parent);
+        on_request_move.connect(&toplevel->events.request_move);
+//        on_request_resize.connect(&toplevel->events.request_resize);
+//        on_request_maximize.connect(&toplevel->events.request_maximize);
+//        on_request_minimize.connect(&toplevel->events.request_minimize);
+////        on_show_window_menu.connect(&toplevel->events.request_show_window_menu);
+//        on_request_fullscreen.connect(&toplevel->events.request_fullscreen);
+
+
+        on_request_move.set_callback([&] (void*)
+        {
+            auto node = deco_node.lock();
+            auto view = node->_view.lock();
+            LOGI("on_request_move");
+//            auto dec_toplevel = decorated_toplevel.lock();
+            wf::get_core().default_wm->move_request(view);
+        });
+//        on_request_resize.set_callback([&] (auto data)
+//        {
+//            auto ev = static_cast<wlr_xdg_toplevel_resize_event*>(data);
+//            wf::get_core().default_wm->resize_request({this}, ev->edges);
+//        });
+//        on_request_minimize.set_callback([&] (void*)
+//        {
+//            wf::get_core().default_wm->minimize_request({this}, true);
+//        });
+//        on_request_maximize.set_callback([&] (void *data)
+//        {
+//            wf::get_core().default_wm->tile_request({this},
+//                toplevel->requested.maximized ? wf::TILED_EDGES_ALL : 0);
+//        });
+//        on_request_fullscreen.set_callback([&] (void *data)
+//        {
+//            wlr_xdg_toplevel_requested *req = &toplevel->requested;
+//            auto wo = wf::get_core().output_layout->find_output(req->fullscreen_output);
+//            wf::get_core().default_wm->fullscreen_request({this}, wo, req->fullscreen);
+//        });
 
         on_commit.set_callback([=](void *)
                                {
