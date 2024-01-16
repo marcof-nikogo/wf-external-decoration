@@ -5926,8 +5926,7 @@ meta_theme_get_title_scale (MetaTheme     *theme,
 
   return style->layout->title_scale;
 }
-MetaFrameFlags common_flags = META_FRAME_MAXIMIZED | 
-                              META_FRAME_ALLOWS_DELETE | 
+MetaFrameFlags common_flags = META_FRAME_ALLOWS_DELETE | 
                               META_FRAME_ALLOWS_MINIMIZE | 
                               META_FRAME_ALLOWS_MAXIMIZE | 
                               META_FRAME_ALLOWS_MENU |
@@ -6326,7 +6325,7 @@ meta_theme_draw_frame (MetaTheme              *theme,
   }
   else
   {
-    flags &= ~(MetaFrameFlags)META_FRAME_STUCK;
+    flags &= ~META_FRAME_STUCK;
   }
   if(state & STATE_SHADED)
   {

@@ -30,25 +30,6 @@ static void title_changed(void*,
     }        
 }
 
-static void reset_states(void*, wf_decorator_manager*, uint32_t view)
-{
-    if(view_to_decor.count(view) > 0)
-    {
-        std::cout << "reset_states" << std::endl;
-        reset_deco_states(view_to_decor[view]);
-    }
-
-}
-static void check_button(void*,
-    wf_decorator_manager*, uint32_t view, uint32_t x, uint32_t y, uint32_t pressed)
-{
-    if(view_to_decor.count(view) > 0)
-    {
-        //std::cout << "check_button" << std::endl;
-        update_buttons(view_to_decor[view], x, y, pressed);
-    }        
-}
-
 static void view_state_changed(void*,
     wf_decorator_manager*, uint32_t view, uint32_t state)
 {
@@ -82,19 +63,11 @@ void window_action(GtkWidget *window, const char *action)
     wf_decorator_manager_window_action(decorator_manager, decor_to_view[window], action);
 }
 
-void update_title_rect(GtkWidget *window, uint32_t top, uint32_t bottom, uint32_t left, uint32_t right)
-{
-    wf_decorator_manager_update_title_rect(decorator_manager, decor_to_view[window], 
-                                       top, bottom, left, right);
-}
-
 const wf_decorator_manager_listener decorator_listener =
 {
     create_new_decoration,
     title_changed,
-    check_button,
     view_state_changed,
-    reset_states,
     view_unmapped
 };
 

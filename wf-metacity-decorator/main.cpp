@@ -58,6 +58,7 @@ public:
     int                     state = 0;
     uint                    type = 0;
     GdkRectangle            *title_bar;
+    int                     current_edge = -1;
     
     ~decoration_data_t ()
     {
@@ -94,6 +95,9 @@ public:
     gboolean check_button (int mode, int x, int y, MetaButtonState state, int pressed, MetaButtonFunction *what)
     {
         *what = META_BUTTON_FUNCTION_LAST;
+        if (y > title_bar->y + title_bar->height)
+            return FALSE;
+            
         MetaButtonFunction *which_buttons;
         if (mode == MODE_RELEASE)
         {
@@ -199,10 +203,26 @@ static void send_borders (const char *font)
     update_borders(fgeom.borders.total.top, fgeom.borders.total.bottom, fgeom.borders.total.left, fgeom.borders.total.right, BORDERS_DELTA);
 }
 
+void popup_menu (GdkEventButton *event)
+{
+    GtkWidget *popup = gtk_menu_new();
+    GtkWidget *item = gtk_menu_item_new_with_label("Minimize");
+  	gtk_menu_shell_append(GTK_MENU_SHELL(popup), item);
+    item = gtk_menu_item_new_with_label("Maximize");
+  	gtk_menu_shell_append(GTK_MENU_SHELL(popup), item);
+    item = gtk_menu_item_new_with_label("Close");
+  	gtk_menu_shell_append(GTK_MENU_SHELL(popup), item);
+  	gtk_widget_show_all(popup);
+  	gtk_menu_popup_at_pointer (GTK_MENU(popup), NULL); //(GdkEvent*)event);
+}
+
 static void activate (GtkApplication* app, gpointer)
 {
     GdkDisplay* display = gdk_display_get_default();
     setup_protocol(display);
+    GtkSettings *settings = gtk_settings_get_default ();
+    // use the same cursors as wayfire
+    g_object_set (settings, "gtk-cursor-theme-name", "default", NULL);
     load_config();
 
     std::string val = config["theme"];
@@ -229,8 +249,6 @@ gboolean draw_window(GtkWindow *window, cairo_t *cr, gpointer)
     cairo_set_source_rgba (cr, 0, 0, 0, 0);
     cairo_paint (cr);        
     decoration_data_t *deco = views_data[GTK_WIDGET(window)];
-    // save last title rect width
-    int last_title_widht = deco->title_bar->width;
     
     // get the actual total window size
     gtk_window_get_size (window, &client_width, &client_height);
@@ -248,7 +266,7 @@ gboolean draw_window(GtkWindow *window, cairo_t *cr, gpointer)
     }
     printf("width %d - height %d\n", client_width, client_height);
     GtkStyleContext *style_gtk = gtk_widget_get_style_context (GTK_WIDGET(window));
-
+    
     // draw decoration
     meta_theme_draw_frame (metatheme, 
                            deco->state, 
@@ -262,37 +280,151 @@ gboolean draw_window(GtkWindow *window, cairo_t *cr, gpointer)
                            deco->type ? &dialog_button_layout : &button_layout,
                            deco->button_states);
                            
-    if (deco->title_bar->width != last_title_widht)
-    {
-        // send the updated title rect
-        update_title_rect (GTK_WIDGET(window), deco->title_bar->y,
-                       deco->title_bar->y + deco->title_bar->height,
-                       deco->title_bar->x,
-                       deco->title_bar->x + deco->title_bar->width);
-    }                       
-    
     return TRUE;
 }
 
 gboolean motion_notify_event (GtkWidget *window, GdkEventMotion *ev, gpointer data)
 {
-    printf("motion_notify_event %d %d\n", (int)ev->x, (int)ev->y);
-    return FALSE;
+    if(views_data.count(window))
+    {
+        decoration_data_t *deco = views_data[window];
+        const char *cursor_name = NULL;
+        deco->current_edge = -1;
+        int x = (int)ev->x;
+        int y = (int)ev->y;
+        MetaButtonFunction what;
+        int width,height;
+        
+        gtk_window_get_size (GTK_WINDOW(window), &width, &height);
+        if (y < deco->title_bar->y)
+        {
+            if (x < deco->frame_geometry.borders.total.left)
+            {
+                deco->current_edge = GDK_WINDOW_EDGE_NORTH_WEST;
+                cursor_name = "nw-resize";
+            }                
+            else if (x > width - deco->frame_geometry.borders.total.right)
+            {
+                deco->current_edge = GDK_WINDOW_EDGE_NORTH_EAST;
+                cursor_name = "ne-resize";
+            }                
+            else
+            {
+                deco->current_edge = GDK_WINDOW_EDGE_NORTH;
+                cursor_name = "n-resize";
+            }                
+        }
+        else if (deco->check_button (MODE_HOVER, x, y, META_BUTTON_STATE_PRELIGHT, 0, &what))
+        {
+            gtk_widget_queue_draw(window);
+        }
+        else 
+        {
+            deco->reset_button_states();
+            if (y > height - deco->frame_geometry.borders.total.bottom)
+            {
+                if ( x < deco->frame_geometry.borders.total.left)
+                {
+                    deco->current_edge = GDK_WINDOW_EDGE_SOUTH_WEST;
+                    cursor_name = "sw-resize";
+                }                
+                else if (x > width - deco->frame_geometry.borders.total.right)
+                {
+                    deco->current_edge = GDK_WINDOW_EDGE_SOUTH_EAST;
+                    cursor_name = "se-resize";
+                }
+                else
+                {                
+                    deco->current_edge = GDK_WINDOW_EDGE_SOUTH;
+                    cursor_name = "s-resize";
+                }
+            }                
+            else if (x < deco->frame_geometry.borders.total.left)
+            {
+                deco->current_edge = GDK_WINDOW_EDGE_WEST;
+                cursor_name = "w-resize";
+            }                
+            else if (x > width - deco->frame_geometry.borders.total.right)
+            {
+                deco->current_edge = GDK_WINDOW_EDGE_EAST;
+                cursor_name = "e-resize";
+            }                
+        }
+        GdkWindow *gdkw = gtk_widget_get_window (window);
+        if (deco->current_edge >= 0)
+        {
+            gdk_window_set_cursor (gdkw, gdk_cursor_new_from_name (gdk_display_get_default(), cursor_name));
+            deco->reset_button_states();
+        }  
+        else
+        {
+            gdk_window_set_cursor (gdkw, NULL);
+        }
+        gtk_widget_queue_draw(window);
+    }    
+    return TRUE;
 }
 
 gboolean button_press_event (GtkWidget *window, GdkEventButton *ev, gpointer data)
 {
-    gint x,y;
-    gtk_window_get_position (GTK_WINDOW(window), &x, &y);
-    printf("button_press_event %d %d %d\n", ev->button, x, y);
-    gtk_window_move (GTK_WINDOW(window), x + 10, y + 10);
+    if(ev->button != 1)
+        return TRUE;
+    if(views_data.count(window))
+    {
+        int x = (int)ev->x;
+        int y = (int)ev->y;
+        MetaButtonFunction what;
+
+        decoration_data_t *deco = views_data[window];
+        if( deco->current_edge >= 0)
+        {
+            gtk_window_begin_resize_drag (GTK_WINDOW(window), (GdkWindowEdge)deco->current_edge, ev->button, ev->x_root, ev->y_root, ev->time);
+            deco->reset_button_states ();
+        }            
+        else if (deco->check_button (MODE_CLICK, x, y, META_BUTTON_STATE_PRESSED, 1, &what))
+        {
+            gtk_widget_queue_draw(window);
+            if (strcmp(meta_button_function_to_string (what), "menu") == 0)
+                popup_menu (ev);
+        }
+        else
+        {                   
+            gtk_window_begin_move_drag (GTK_WINDOW(window), ev->button, ev->x_root, ev->y_root, ev->time);
+            deco->reset_button_states ();
+        }            
+    }
     return TRUE;
 }
 
 gboolean button_release_event (GtkWidget *window, GdkEventButton *ev, gpointer data)
 {
-    printf("button_release_event %d %d %d\n", ev->button, (int)ev->x, (int)ev->y);
-    return FALSE;
+    if(ev->button != 1)
+        return TRUE;
+    if(views_data.count(window))
+    {
+        int x = (int)ev->x;
+        int y = (int)ev->y;
+        MetaButtonFunction what;
+
+        decoration_data_t *deco = views_data[window];
+        if (deco->last_pressed_button != META_BUTTON_FUNCTION_LAST)
+        {
+            if (deco->check_button (MODE_RELEASE, x, y, META_BUTTON_STATE_PRESSED, 0, &what))
+            {
+                const char *action = meta_button_function_to_string (what);
+                printf("action %s\n", action);
+                deco->reset_button_states();
+                if (strcmp(action, "menu") == 0)
+                {
+                    popup_menu (ev);
+                }
+                // send button action
+                window_action (window, action);
+            }
+            gtk_widget_queue_draw(window);
+        }
+    }        
+    return TRUE;
 }
 
 // type: 0 toplevel, 1 dialog 
@@ -310,7 +442,7 @@ GtkWidget *create_deco_window (std::string title, uint type)
     g_signal_connect (window,"draw", (GCallback)draw_window, NULL);
     g_signal_connect (window,"button-press-event", (GCallback)button_press_event, NULL);
     g_signal_connect (window,"button-release-event", (GCallback)button_release_event, NULL);
-//    g_signal_connect (window,"motion-notify-event", (GCallback)motion_notify_event, NULL);
+    g_signal_connect (window,"motion-notify-event", (GCallback)motion_notify_event, NULL);
     gtk_widget_show_all(window);
     printf("CREATED new decoration: %s\n", title.c_str());
     decoration_data_t *deco = new decoration_data_t (window, type);
@@ -328,57 +460,6 @@ void set_title(GtkWidget *window, const char *title)
         decoration_data_t *deco = views_data[window];
         deco->update_title (title);
         gtk_widget_queue_draw(window);
-    }        
-}
-
-void reset_deco_states(GtkWidget *window)
-{
-    g_return_if_fail(GTK_IS_WINDOW(window));
-    if(views_data.count(window))
-    {
-        decoration_data_t *deco = views_data[window];
-        deco->reset_button_states();
-        gtk_widget_queue_draw(window);
-    }
-}
-
-void update_buttons(GtkWidget *window, int x, int y, int pressed)
-{
-    g_return_if_fail(GTK_IS_WINDOW(window));
-    if(views_data.count(window))
-    {
-        decoration_data_t *deco = views_data[window];
-        //printf("update_buttons %d %d - pressed %d - last %d\n", x, y, pressed, deco->last_active_button);
-        MetaButtonFunction what;
-        if (!pressed) 
-        {
-            if (deco->last_pressed_button != META_BUTTON_FUNCTION_LAST)
-            {
-                if (deco->check_button (MODE_RELEASE, x, y, META_BUTTON_STATE_PRESSED, pressed, &what))
-                {
-                    const char *action = meta_button_function_to_string (what);
-                    printf("action %s\n", action);
-                    deco->reset_button_states();
-                    // send button action
-                    window_action (window, action);
-                }
-                gtk_widget_queue_draw(window);
-            }
-            else
-            {
-                if (deco->check_button (MODE_HOVER, x, y, META_BUTTON_STATE_PRELIGHT, pressed, &what))
-                {
-                    gtk_widget_queue_draw(window);
-                }                    
-            }
-        }
-        else
-        {
-            if (deco->check_button (MODE_CLICK, x, y, META_BUTTON_STATE_PRESSED, pressed, &what))
-            {
-                gtk_widget_queue_draw(window);
-            }
-        }                
     }        
 }
 

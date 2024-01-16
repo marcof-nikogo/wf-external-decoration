@@ -88,33 +88,27 @@ class extern_decoration_node_t : public wf::scene::wlr_surface_node_t //, public
     public:
     int current_x, current_y, current_ms, may_be_hover = 0;
     uint32_t state = 0;
+
     wf::wl_timer<false> refresh_timer;
     bool shaded;
     std::shared_ptr<wf::scene::node_t> main_node;
     wf::geometry_t size;
     wf::geometry_t orig_size;
     
-    wf::decoration_margins_t title_rect =
-    {
-        .left = 4,
-        .right = 4,
-        .bottom = 4,
-        .top = 4,
-    };
     int is_grabbed = 0;
     int view_id;
     std::weak_ptr<wf::toplevel_view_interface_t> _view;
     
-    void handle_activated_state()
-    {
-    }
     extern_decoration_node_t (wlr_surface *v, bool b, wayfire_toplevel_view view) : wlr_surface_node_t(v,b)  //, node_t(false)
     {
         this->_view = view->weak_from_this();
         view_id = view->get_id();
         state = STATE_FOCUSED;
         if(view->pending_tiled_edges())
+        {
             state |= STATE_MAXIMIZED;
+            LOGI("extern_decoration_node_t " , state);
+        }
         if (decorator_resource)
             wf_decorator_manager_send_view_state_changed(decorator_resource, view_id, state);
         view->connect(&on_activated);
@@ -148,11 +142,6 @@ class extern_decoration_node_t : public wf::scene::wlr_surface_node_t //, public
             else
                 state |= STATE_MAXIMIZED;
             wf_decorator_manager_send_view_state_changed(decorator_resource, view_id, state);
-            // this is needed because decoration is always a commit behind
-            refresh_timer.set_timeout(100, [=] ()
-            {
-                wf_decorator_manager_send_reset_states(decorator_resource, view_id);
-            });
         }          
     };
     
@@ -166,15 +155,9 @@ class extern_decoration_node_t : public wf::scene::wlr_surface_node_t //, public
             else
                 state &= ~STATE_STICKY;
             wf_decorator_manager_send_view_state_changed(decorator_resource, view_id, state);
-            // this is needed because decoration is always a commit behind
-            refresh_timer.set_timeout(100, [=] ()
-            {
-                wf_decorator_manager_send_reset_states(decorator_resource, view_id);
-            });
         }          
     };
-    
-    
+  
     wf::point_t get_offset() 
     {
         return { 0, 0 };
@@ -190,132 +173,10 @@ class extern_decoration_node_t : public wf::scene::wlr_surface_node_t //, public
 
         return {};
     }
-/*
-    pointer_interaction_t& pointer_interaction() override 
-    {
-        return *this;
-    }
 
-    void handle_pointer_enter(wf::pointf_t point) override  
-    {
-        current_x = point.x;
-        current_y = point.y;
-        update_cursor ();
-    }
-
-    void handle_pointer_leave() override
-    {
-        if (may_be_hover)
-        {
-            // send reset button states
-            wf_decorator_manager_send_reset_states(decorator_resource, view_id);
-            may_be_hover = 0;
-        }
-        update_cursor ();
-    }
-
-    void handle_pointer_motion(wf::pointf_t to, uint32_t time_ms) override
-    {
-        if (time_ms - current_ms > 100 && (current_x != (int)to.x || current_y != (int)to.y))
-        {
-            current_x = to.x;
-            current_y = to.y;
-            current_ms = time_ms;    
-            uint32_t edges = update_cursor ();
-            if (!edges)
-            {
-                if (to.x < title_rect.left || to.x > title_rect.right)
-                {
-                    may_be_hover = 1;
-                    wf_decorator_manager_send_check_button(decorator_resource, view_id, current_x, current_y, is_grabbed);
-                }                
-                else
-                {
-                    if (may_be_hover)
-                    {
-                        // send reset button states
-                        wf_decorator_manager_send_reset_states(decorator_resource, view_id);
-                        may_be_hover = 0;
-                    }
-                }
-            }
-        }                                
-    }
-
-    void handle_pointer_button(const wlr_pointer_button_event& ev) override
-    {
-        if (ev.button != BTN_LEFT) {
-            return;
-        }
-        is_grabbed = ev.state;
-        uint32_t edge = calculate_resize_edges ();
-        if (edge)
-            handle_action (1, edge);
-        else
-        {
-            if (current_x < title_rect.left || current_x > title_rect.right)
-            {
-                wf_decorator_manager_send_check_button(decorator_resource, view_id, current_x, current_y, is_grabbed);
-                may_be_hover = 0;                
-            }                
-            else
-                handle_action (0, 0);
-        }
-    }
-    
-    void handle_action (int action, uint32_t edge)
-    {
-        auto view = _view.lock();
-        switch (action)
-        {
-            case 0:
-                wf::get_core().default_wm->move_request(view);
-                break;
-            case 1:
-                wf::get_core().default_wm->resize_request(view, edge);
-                break;
-            case 2:
-                if (view->pending_tiled_edges()) {
-                    wf::get_core().default_wm->tile_request(view, 0);
-                } else {
-                    wf::get_core().default_wm->tile_request(view, wf::TILED_EDGES_ALL);
-                }
-            default:  
-                break;      
-        }
-    }        
-
-    uint32_t calculate_resize_edges()
-    {
-        uint32_t edge = 0; 
-        if (state & STATE_MAXIMIZED || state & STATE_SHADED)
-            return edge;
-        auto g = get_bounding_box();
-        if ( current_x < deco_margins.left )
-            edge |= WLR_EDGE_LEFT;
-        if ( current_x > g.width - deco_margins.right)
-            edge |= WLR_EDGE_RIGHT;
-        if ( current_y > g.height - deco_margins.bottom)
-            edge |= WLR_EDGE_BOTTOM;
-        if ( current_y < title_rect.top)
-            edge |= WLR_EDGE_TOP;
-        return edge;
-    }
-    
-    // Update the cursor based on @current_input
-    uint32_t update_cursor() 
-    {
-        uint32_t edges = calculate_resize_edges();
-        auto cursor_name = edges > 0 ?
-            wlr_xcursor_get_resize_name((wlr_edges)edges) : "default";
-        wf::get_core().set_cursor(cursor_name);
-        return edges;
-    }
-*/
 };  // extern_decoration_node_t
 
 static std::map<uint32_t, std::shared_ptr<extern_decoration_node_t>> view_to_decor;
-
 
 // reset all decorations activated state
 static void handle_activated_state()
@@ -335,9 +196,11 @@ public:
     // The 'allowed' portion of the children
     wf::region_t allowed;
     int view_id;
+    
     extern_mask_node_t() : floating_inner_node_t(false)
     {
     }
+    
     ~extern_mask_node_t()
     {
         LOGI("extern_mask_node_t deleted");
@@ -345,6 +208,7 @@ public:
         wf_decorator_manager_send_view_unmapped(decorator_resource, view_id);
         LOGI("view_to_decor ", view_to_decor.size());
     }
+    
     std::optional<wf::scene::input_node_t> find_node_at(const wf::pointf_t &at) override
     {
         if (allowed.contains_pointf(at))
@@ -431,7 +295,7 @@ public:
     std::string stringify() const
     {
         std::ostringstream out;
-        out << "gtk3deco(" << this << ")";
+        out << "extern_decoration_object_t(" << this << ")";
         return out.str();
     }
 
@@ -491,6 +355,8 @@ public:
         }
 
         LOGI("Size is ", wf::dimensions(box), " state is ", (int)deco_state);
+
+        recompute_mask ();
 
         switch (this->deco_state)
         {
@@ -557,9 +423,9 @@ public:
     std::weak_ptr<extern_decoration_node_t> deco_node;
     std::weak_ptr<wf::toplevel_t> decorated_toplevel;
     int first = 0;
+    std::weak_ptr<wf::toplevel_view_interface_t> _view;
     
-    wf::wl_listener_wrapper on_request_move, on_request_resize, on_request_minimize, on_request_maximize,
-        on_request_fullscreen;// on_show_window_menu;
+    wf::wl_listener_wrapper on_request_move, on_request_resize, on_request_maximize, on_show_window_menu;
     
     extern_decoration_object_t(
         wlr_xdg_toplevel *toplevel, std::weak_ptr<extern_decoration_node_t> deco_node,
@@ -568,50 +434,47 @@ public:
         this->toplevel = toplevel;
         this->deco_node = deco_node;
         this->mask_node = mask;
-        auto tmp = mask.lock();
         auto node = deco_node.lock();
+        _view = node->_view;
+        auto tmp = mask.lock();
         tmp->view_id = node->view_id;
         this->decorated_toplevel = decorated_toplevel;
         
-//        auto dec_toplevel = decorated_toplevel.lock();
-//        auto decorated_view = wf::find_view_for_toplevel(dec_toplevel);
-//        on_set_parent.connect(&toplevel->events.set_parent);
         on_request_move.connect(&toplevel->events.request_move);
-//        on_request_resize.connect(&toplevel->events.request_resize);
-//        on_request_maximize.connect(&toplevel->events.request_maximize);
-//        on_request_minimize.connect(&toplevel->events.request_minimize);
-////        on_show_window_menu.connect(&toplevel->events.request_show_window_menu);
-//        on_request_fullscreen.connect(&toplevel->events.request_fullscreen);
-
+        on_request_resize.connect(&toplevel->events.request_resize);
+//        on_show_window_menu.connect(&toplevel->events.request_show_window_menu);
 
         on_request_move.set_callback([&] (void*)
         {
-            auto node = deco_node.lock();
-            auto view = node->_view.lock();
-            LOGI("on_request_move");
-//            auto dec_toplevel = decorated_toplevel.lock();
+            auto view = _view.lock();
             wf::get_core().default_wm->move_request(view);
         });
-//        on_request_resize.set_callback([&] (auto data)
+        
+        on_request_resize.set_callback([&] (auto data)
+        {
+            auto view = _view.lock();
+            auto ev = static_cast<wlr_xdg_toplevel_resize_event*>(data);
+            wf::get_core().default_wm->resize_request(view, ev->edges);
+        });
+
+//        on_show_window_menu.set_callback([&] (void *data)
 //        {
-//            auto ev = static_cast<wlr_xdg_toplevel_resize_event*>(data);
-//            wf::get_core().default_wm->resize_request({this}, ev->edges);
-//        });
-//        on_request_minimize.set_callback([&] (void*)
-//        {
-//            wf::get_core().default_wm->minimize_request({this}, true);
-//        });
-//        on_request_maximize.set_callback([&] (void *data)
-//        {
-//            wf::get_core().default_wm->tile_request({this},
-//                toplevel->requested.maximized ? wf::TILED_EDGES_ALL : 0);
-//        });
-//        on_request_fullscreen.set_callback([&] (void *data)
-//        {
-//            wlr_xdg_toplevel_requested *req = &toplevel->requested;
-//            auto wo = wf::get_core().output_layout->find_output(req->fullscreen_output);
-//            wf::get_core().default_wm->fullscreen_request({this}, wo, req->fullscreen);
-//        });
+//            wlr_xdg_toplevel_show_window_menu_event *event =
+//                (wlr_xdg_toplevel_show_window_menu_event*)data;
+//            auto view   = _view.lock();
+//            auto output = view->get_output();
+//            LOGI("on_show_window_menu");
+//            if (!output)
+//            {
+//                return;
+//            }
+//            wf::view_show_window_menu_signal d;
+//            d.view = view;
+//            d.relative_position.x = event->x;
+//            d.relative_position.y = event->y;
+//            output->emit(&d);
+//            wf::get_core().emit(&d);
+//        });        
 
         on_commit.set_callback([=](void *)
                                {
@@ -664,15 +527,15 @@ private:
         wf::dassert(masked != nullptr, "Masked node does not exist anymore??");
         auto tmp = deco_node.lock();
         auto bbox = tmp->get_bounding_box();
-
-        // masked->allowed = wf::geometry_t{-100000, -10000, 10000000, 1000000};
+        int delta = tmp->state & STATE_MAXIMIZED ? borders_delta : 0;
         masked->allowed = bbox;
-        wf::region_t cut_out = wf::geometry_t{
-            .x = bbox.x + deco_margins.left,
-            .y = bbox.y + deco_margins.top,
-            .width = bbox.width - deco_margins.left - deco_margins.right,
-            .height = bbox.height - deco_margins.top - deco_margins.bottom,
+        wf::geometry_t g{
+            .x = bbox.x + deco_margins.left - delta,
+            .y = bbox.y + deco_margins.top - delta,
+            .width = bbox.width - deco_margins.left - deco_margins.right - delta * 2,
+            .height = bbox.height - deco_margins.top - deco_margins.bottom - delta * 2
         };
+        wf::region_t cut_out = g;
         masked->allowed ^= cut_out;
     }
 
@@ -703,21 +566,6 @@ void do_update_borders(wl_client *, struct wl_resource *, uint32_t top, uint32_t
     deco_margins.top = top;
     LOGI("do_update_borders ", top, " ", bottom, " ", left, " ", right, " ", delta);
     got_borders = 1;
-}
-
-void do_update_title_rect(wl_client *, struct wl_resource *, uint32_t id, uint32_t top, uint32_t bottom, uint32_t left, uint32_t right)
-{
-    if (view_to_decor.count(id))
-    {
-        LOGI("do_update_title_rect");
-        auto deco = view_to_decor[id];
-        deco->title_rect.top = top;
-        deco->title_rect.bottom = bottom; 
-        deco->title_rect.left = left;
-        deco->title_rect.right = right; 
-        // this is needed because decoration is always a commit behind
-        wf_decorator_manager_send_reset_states(decorator_resource, id);
-    }
 }
 
 /* Button action sent by the client
@@ -758,6 +606,14 @@ void do_window_action(wl_client *, struct wl_resource *, uint32_t id, const char
             if (deco->state & STATE_SHADED)
             {
                 do_window_action(NULL, NULL, id, "unshade");
+            }
+            if (deco->state & STATE_MAXIMIZED)
+            {
+                // this is needed because the size of margins changes
+                auto view = deco->_view.lock();
+                view->toplevel()->pending().margins = deco_margins;
+                wf::get_core().tx_manager->schedule_object(view->toplevel());
+                deco->state &= ~STATE_MAXIMIZED;
             }
         }
         if (view->pending_tiled_edges()) {
@@ -812,8 +668,7 @@ void do_window_action(wl_client *, struct wl_resource *, uint32_t id, const char
 const struct wf_decorator_manager_interface decorator_implementation =
     {
         .update_borders = do_update_borders,
-        .window_action = do_window_action,
-        .update_title_rect = do_update_title_rect
+        .window_action = do_window_action
     };
 
 // never called
@@ -967,16 +822,16 @@ class external_decoration_plugin : public wf::plugin_interface_t
                 if (auto deco = toplevel->get_data<extern_toplevel_custom_data>())
                 {
                     auto& pending = toplevel->pending();
-                    int delta = pending.tiled_edges ? 0 : borders_delta;
+                    int delta = pending.tiled_edges ? borders_delta : 0;
                     wf::decoration_margins_t margins;
                     margins.top = deco_margins.top - delta;
                     margins.left = deco_margins.left - delta;
                     margins.right = deco_margins.right - delta;
                     margins.bottom = deco_margins.bottom - delta;
-                    
+
                     // adjust offset
                     deco->translation_node->set_offset({-margins.left, -margins.top});
-                    
+
                     pending.margins = toplevel->pending().fullscreen ? wf::decoration_margins_t{0, 0, 0, 0} : margins;
                                         
                     if (deco->decoration->first == 0)
@@ -1004,13 +859,24 @@ class external_decoration_plugin : public wf::plugin_interface_t
         deco->decoration->set_final_size(wf::dimensions(toplvl->committed().geometry));
     };
 
+    wf::signal::connection_t<wf::view_decoration_state_updated_signal> on_decoration_state_changed =
+        [=] (wf::view_decoration_state_updated_signal *ev)
+    {
+        if (!view_to_decor.count(ev->view->get_id()) && ev->view->should_be_decorated() && !ignore_decoration_of_view(ev->view))
+        {
+            auto toplevel = wf::toplevel_cast(ev->view);    
+            // if parent is nullptr is a main window, else is a dialog             
+            send_create_decoration(ev->view, toplevel->parent != nullptr);
+        }
+    };
+    
     void send_create_decoration(wayfire_view view, bool type)
     {
         const char *app_id = view->get_app_id().c_str();
         if (decorator_resource && app_id && strcmp(app_id,"nil"))
         {
             if(!view->get_wlr_surface())
-                return;                    
+                return;
             LOGI("Need decoration for ", view);
             view->connect(&title_set);
             wf_decorator_manager_send_create_new_decoration(decorator_resource, view->get_id(), type);
@@ -1043,7 +909,7 @@ class external_decoration_plugin : public wf::plugin_interface_t
     {
         return ignore_views.matches(view);
     }
-    
+
     void decorate_present_views ()
     {
         if (decorator_resource)
@@ -1051,21 +917,23 @@ class external_decoration_plugin : public wf::plugin_interface_t
             for (auto &view : wf::get_core().get_all_views())
             {
                 auto toplevel = toplevel_cast(view);
-                if (toplevel && toplevel->should_be_decorated()  && !ignore_decoration_of_view(toplevel))
+                if (toplevel && toplevel->should_be_decorated() && !ignore_decoration_of_view(toplevel))
                 {
                     send_create_decoration(view, toplevel->parent != nullptr);
                 }                    
             }
         }
     }
+
     void setup ()
     {
         decorate_present_views ();
         wf::get_core().connect(&on_mapped);
         wf::get_core().connect(&on_new_xdg_surface);
         wf::get_core().tx_manager->connect(&on_new_tx);
+        wf::get_core().connect(&on_decoration_state_changed);
     }
-          
+
 public:
     wf::option_wrapper_t<std::string> decorator{"wf-external-decorator/decorator"};          
     pid_t decorator_pid;
