@@ -73,7 +73,7 @@ left_button1,left_button2...:right_button1,right_button2...
 
 ## Hacking
 
-Implementing (and maybe expanding) the same protocol you can write your client using whatever suits your taste, Qt, WxWidget etc. You only have to render the decoration frame.
+Implementing (and maybe expanding) the same protocol you can write your client using whatever suits your taste, Qt, WxWidget etc.
 
 The workflow is:
 
@@ -85,20 +85,11 @@ Then for every new mapped view the plugin sends a **create_new_decoration** even
 
 Soon after sends the **title_changed** event with the real title for the view, and every time the app changes the title you will receive it.
 
-With this you can draw a full decoration and can send to the plugin the rect area occupied by the title in the top border, request **update_title_rect**.
-This is used by the plugin to determine if a pointer event in the top border is elegible for some button event, in this case it sends a **check_button** event carrying the pointer coords and the mouse button state.
+Then you must handle the pointer events to draw prelight/pressed buttons, move, resize and send a **window_action** request with the action associated to the pressed button: close, minimize etc.
 
-When the state is pressed and it happens to be on a button you must draw the pressed button and send a **window_action** request with the action associated to the button: close, minimize etc.
-
-When not pressed you have to handle the prelight of the button interested, if any.
-
-When the view state changes, from activated to inactive, or to maximized etc, the plugin sends a **view_state_changed** event carrying a bit mask with all the active states of the view, like maximized, sticky, shaded and activated (focused).
+When the view state changes by other means from activated to inactive, or to maximized etc, the plugin sends a **view_state_changed** event carrying a bit mask with all the active states of the view, like maximized, sticky, shaded and activated (focused).
 
 When a view is unmapped the plugin sends a **view_unmapped** event, use it for free resources.
-
-There is a last event the plugin can send, **reset_states**, its purpose is reset the decoration buttons to a normal state and redraw the decoration. It is sent all times a redraw of the decoration is needed.
-
-Final note: every window you create in the client will soon be captured by the plugin and then will no more receive pointer events, you have no power at all on the window, can only draw on it.
 
 ## Screenshots
 
