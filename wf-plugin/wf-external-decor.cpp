@@ -32,7 +32,6 @@
 #include <wayfire/scene-operations.hpp>
 #include <wayfire/region.hpp>
 #include <wayfire/matcher.hpp>
-
 #include <wayfire/toplevel.hpp>
 #include <wayfire/txn/transaction-object.hpp>
 #include <wayfire/txn/transaction-manager.hpp>
@@ -83,7 +82,7 @@ std::ostream &operator<<(std::ostream &out, const wf::dimensions_t &dims)
     return out;
 }
 
-class extern_decoration_node_t : public wf::scene::wlr_surface_node_t //, public wf::pointer_interaction_t, public wf::touch_interaction_t
+class extern_decoration_node_t : public wf::scene::wlr_surface_node_t 
 {
     public:
     int current_x, current_y, current_ms, may_be_hover = 0;
@@ -425,7 +424,8 @@ public:
     int first = 0;
     std::weak_ptr<wf::toplevel_view_interface_t> _view;
     
-    wf::wl_listener_wrapper on_request_move, on_request_resize, on_request_maximize, on_show_window_menu;
+    wf::wl_listener_wrapper on_request_move, on_request_resize, on_request_maximize, 
+                            on_show_window_menu;
     
     extern_decoration_object_t(
         wlr_xdg_toplevel *toplevel, std::weak_ptr<extern_decoration_node_t> deco_node,
@@ -457,24 +457,25 @@ public:
             wf::get_core().default_wm->resize_request(view, ev->edges);
         });
 
-//        on_show_window_menu.set_callback([&] (void *data)
-//        {
-//            wlr_xdg_toplevel_show_window_menu_event *event =
-//                (wlr_xdg_toplevel_show_window_menu_event*)data;
-//            auto view   = _view.lock();
-//            auto output = view->get_output();
-//            LOGI("on_show_window_menu");
-//            if (!output)
-//            {
-//                return;
-//            }
-//            wf::view_show_window_menu_signal d;
-//            d.view = view;
-//            d.relative_position.x = event->x;
-//            d.relative_position.y = event->y;
-//            output->emit(&d);
-//            wf::get_core().emit(&d);
-//        });        
+        on_show_window_menu.set_callback([&] (void *data)
+        {
+            wlr_xdg_toplevel_show_window_menu_event *event =
+                (wlr_xdg_toplevel_show_window_menu_event*)data;
+            auto view   = _view.lock();
+            auto output = view->get_output();
+            LOGI("on_show_window_menu");
+            if (!output)
+            {
+                return;
+            }
+            LOGI("on_show_window_menu ", event->x, " ",event->y);
+            wf::view_show_window_menu_signal d;
+            d.view = view;
+            d.relative_position.x = event->x;
+            d.relative_position.y = event->y;
+            output->emit(&d);
+            wf::get_core().emit(&d);
+        });        
 
         on_commit.set_callback([=](void *)
                                {
@@ -714,6 +715,7 @@ class external_decoration_plugin : public wf::plugin_interface_t
 
         if (ev->surface->role != WLR_XDG_SURFACE_ROLE_TOPLEVEL)
         {
+            LOGI("role");
             return;
         }
 
@@ -751,7 +753,7 @@ class external_decoration_plugin : public wf::plugin_interface_t
             wlr_xdg_toplevel_send_close(toplevel);
             return;
         }
-
+    
         int maximized = target->pending_tiled_edges();
 
         // update title
@@ -822,12 +824,13 @@ class external_decoration_plugin : public wf::plugin_interface_t
                 if (auto deco = toplevel->get_data<extern_toplevel_custom_data>())
                 {
                     auto& pending = toplevel->pending();
-                    int delta = pending.tiled_edges ? borders_delta : 0;
+                    uint edges = pending.tiled_edges;
+                    
                     wf::decoration_margins_t margins;
-                    margins.top = deco_margins.top - delta;
-                    margins.left = deco_margins.left - delta;
-                    margins.right = deco_margins.right - delta;
-                    margins.bottom = deco_margins.bottom - delta;
+                    margins.top = deco_margins.top - (edges & WLR_EDGE_TOP ? borders_delta : 0);
+                    margins.left = deco_margins.left - (edges & WLR_EDGE_LEFT ? borders_delta : 0);
+                    margins.right = deco_margins.right - (edges & WLR_EDGE_RIGHT ? borders_delta : 0);
+                    margins.bottom = deco_margins.bottom - (edges & WLR_EDGE_BOTTOM ? borders_delta : 0);
 
                     // adjust offset
                     deco->translation_node->set_offset({-margins.left, -margins.top});

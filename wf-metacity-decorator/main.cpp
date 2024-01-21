@@ -5,14 +5,6 @@ of Mate Desktop, used also by the latest versions of compiz.
 It parses and renders metacity themes of all versions, i.e. v1, v2 and v3. 
 Not all metacity themes out there support the stick and shade buttons, only those made for marco. 
 
-You can write your own client using whatever suits your taste/skill, Qt, WxWidget etc.
-Every opened window will soon be captured by the plugin and then will no more receive pointer events.
-And it is no more possible popup a menu, at least, on gtk3 is not possible. But even if it were,
-there is no way to change workspace, or minimize, maximize etc. It is the plugin that handle this 
-when receives a window_action request. 
-Your task is, at start, to send a update_borders request.
-And then to render the frame of the windows you create and handle the pointer events sent by the
-plugin through the check_button event.
 The view_state_changed event carries a state, a bit mask:
 
 static uint32_t STATE_FOCUSED   = 1;
@@ -202,18 +194,40 @@ static void send_borders (const char *font)
     // send borders    
     update_borders(fgeom.borders.total.top, fgeom.borders.total.bottom, fgeom.borders.total.left, fgeom.borders.total.right, BORDERS_DELTA);
 }
-
-void popup_menu (GdkEventButton *event)
+GMenuModel *make_popup()
 {
-    GtkWidget *popup = gtk_menu_new();
-    GtkWidget *item = gtk_menu_item_new_with_label("Minimize");
-  	gtk_menu_shell_append(GTK_MENU_SHELL(popup), item);
-    item = gtk_menu_item_new_with_label("Maximize");
-  	gtk_menu_shell_append(GTK_MENU_SHELL(popup), item);
-    item = gtk_menu_item_new_with_label("Close");
-  	gtk_menu_shell_append(GTK_MENU_SHELL(popup), item);
-  	gtk_widget_show_all(popup);
-  	gtk_menu_popup_at_pointer (GTK_MENU(popup), NULL); //(GdkEvent*)event);
+    GMenu *menu = g_menu_new();
+    g_menu_append_item (menu, g_menu_item_new("Minimize", NULL));
+    g_menu_append_item (menu, g_menu_item_new("Maximize", NULL));
+    g_menu_append_item (menu, g_menu_item_new("Close", NULL));
+    return (GMenuModel*)menu;
+} 
+
+void menu_activate (GtkMenuItem *mi, gpointer user_data)
+{
+    const gchar *action = gtk_menu_item_get_label (mi);
+    GtkWidget *window = (GtkWidget*)user_data;
+    window_action (window, action);
+    printf("activate %s\n", action);
+} 
+
+void popup_menu(GtkWidget *window, GdkEventButton *event)
+{
+    GtkWidget *window_popup = gtk_menu_new();
+    GtkWidget *item = gtk_menu_item_new_with_label("minimize");
+    g_signal_connect (item, "activate", (GCallback)menu_activate, (gpointer)window);
+    gtk_widget_show(item);
+    gtk_menu_shell_append(GTK_MENU_SHELL(window_popup), item);
+    item = gtk_menu_item_new_with_label("maximize");
+    g_signal_connect (item, "activate", (GCallback)menu_activate, (gpointer)window);
+    gtk_widget_show(item);
+    gtk_menu_shell_append(GTK_MENU_SHELL(window_popup), item);
+    item = gtk_menu_item_new_with_label("close");
+    g_signal_connect (item, "activate", (GCallback)menu_activate, (gpointer)window);
+    gtk_widget_show(item);
+    gtk_menu_shell_append(GTK_MENU_SHELL(window_popup), item);
+    gtk_widget_show_all(window_popup);
+    gtk_menu_popup_at_pointer (GTK_MENU(window_popup), (GdkEvent*)event);
 }
 
 static void activate (GtkApplication* app, gpointer)
@@ -235,6 +249,8 @@ static void activate (GtkApplication* app, gpointer)
     meta_update_button_layout (val.c_str(), &dialog_button_layout);
     val = config["font"];
     send_borders (val.c_str());
+    
+//    gtk_application_set_menubar (app, make_popup());
     g_application_hold(G_APPLICATION(app));
 }
 
@@ -384,8 +400,6 @@ gboolean button_press_event (GtkWidget *window, GdkEventButton *ev, gpointer dat
         else if (deco->check_button (MODE_CLICK, x, y, META_BUTTON_STATE_PRESSED, 1, &what))
         {
             gtk_widget_queue_draw(window);
-            if (strcmp(meta_button_function_to_string (what), "menu") == 0)
-                popup_menu (ev);
         }
         else
         {                   
@@ -416,7 +430,7 @@ gboolean button_release_event (GtkWidget *window, GdkEventButton *ev, gpointer d
                 deco->reset_button_states();
                 if (strcmp(action, "menu") == 0)
                 {
-                    popup_menu (ev);
+                    popup_menu (window, ev);
                 }
                 // send button action
                 window_action (window, action);
@@ -433,7 +447,6 @@ GtkWidget *create_deco_window (std::string title, uint type)
 {
     GtkWidget *window;
     window = gtk_application_window_new(app);
-    gtk_window_set_default_size(GTK_WINDOW(window), 300, 300);
     gtk_window_set_title(GTK_WINDOW(window), title.c_str());
     GdkScreen *screen = gtk_window_get_screen (GTK_WINDOW(window));
     GdkVisual *visual = gdk_screen_get_rgba_visual (screen);
