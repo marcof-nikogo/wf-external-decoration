@@ -180,7 +180,7 @@ static void load_config ()
 static void send_borders (const char *font)
 {
     int text_height;
-    PangoFontDescription *font_desc = pango_font_description_from_string(font);
+    font_desc = pango_font_description_from_string(font);
     GtkWidget *window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
     GtkStyleContext *style_gtk = gtk_widget_get_style_context (window);
     
@@ -243,6 +243,7 @@ static void activate (GtkApplication* app, gpointer)
     meta_theme_set_current(val.c_str(), TRUE);
     metatheme = meta_theme_get_current();
     
+    /*FIXME: string handling*/
     val = config["button-layout"];
     meta_update_button_layout (val.c_str(), &button_layout);
     val = config["dialog-button-layout"];
